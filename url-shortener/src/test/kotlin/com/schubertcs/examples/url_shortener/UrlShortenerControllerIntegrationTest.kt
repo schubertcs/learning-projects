@@ -1,16 +1,17 @@
 package com.schubertcs.examples.url_shortener
 
-import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldMatch
 import io.kotest.matchers.uri.shouldHaveHost
-import io.kotest.matchers.uri.shouldHavePath
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.client.TestRestTemplate
+import org.springframework.boot.test.web.client.getForEntity
 import org.springframework.boot.test.web.client.postForEntity
 import org.springframework.http.HttpEntity
+import org.springframework.test.context.jdbc.Sql
 import java.net.URI
 
 
@@ -26,5 +27,13 @@ class UrlShortenerControllerIntegrationTest(@Autowired val restTemplate: TestRes
         val shortUrl = entity.body!!.shortUrl
         shortUrl.shouldHaveHost("localhost")
         shortUrl.path.shouldMatch("/[A-Za-z0-9]*".toRegex())
+    }
+
+    @Test
+    @Sql("simpleEntry.sql")
+    fun `expand should return db stored entry`() {
+        val entity = restTemplate.getForEntity<Void>("/abc123")
+        entity.statusCode.value().shouldBe(302)
+        entity.headers.location.shouldBe(URI("http://www.google.com"))
     }
 }

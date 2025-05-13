@@ -1,10 +1,12 @@
 package com.schubertcs.examples.url_shortener
 
 import com.schubertcs.examples.url_shortener.persistence.DbUrl
+import com.schubertcs.examples.url_shortener.persistence.ShortenedCodeNotFoundException
 import com.schubertcs.examples.url_shortener.persistence.ShortenedUrlRepository
 import io.kotest.matchers.equals.shouldBeEqual
 import io.kotest.matchers.equals.shouldNotBeEqual
 import io.kotest.matchers.string.shouldMatch
+import io.kotest.assertions.throwables.shouldThrow
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -57,14 +59,35 @@ class ShorteningServiceTest {
 
     @Test
     fun `repository content should be reused`() {
-        val storedDbUrl = DbUrl("abc123", URI("https://www.google.com"), LocalDateTime.now())
+        val storedDbUrl = DbUrl("abc123", "https://www.google.com")
 
-        every { mockUrlRepo.findByOriginalUrlOrNull(storedDbUrl.originalUrl) } returns storedDbUrl
+        every { mockUrlRepo.findByOriginalUrl(storedDbUrl.originalUrl) } returns storedDbUrl
 
         val sut = ShorteningService(mockUrlRepo)
-        val shortenedResult = sut.shorten(storedDbUrl.originalUrl)
+        val shortenedResult = sut.shorten(URI.create(storedDbUrl.originalUrl))
 
         shortenedResult.shouldBeEqual(storedDbUrl.shortCode)
+    }
+
+    @Test
+    fun `non existing shortcode in expand should raise NotFound exception`() {
+        val sut = ShorteningService(mockUrlRepo)
+
+        shouldThrow<ShortenedCodeNotFoundException> {
+            sut.expand("non-existing")
+        }
+    }
+
+    @Test
+    fun `shortcode should be found in database`() {
+        val storedDbUrl = DbUrl("abc123", "https://www.google.com")
+
+        every { mockUrlRepo.findByIdOrNull(storedDbUrl.shortCode) } returns storedDbUrl
+
+        val sut = ShorteningService(mockUrlRepo)
+        val expandedResult = sut.expand(storedDbUrl.shortCode)
+
+        expandedResult.shouldBeEqual(URI.create(storedDbUrl.originalUrl))
     }
 
     companion object {
@@ -85,7 +108,7 @@ class ShorteningServiceTest {
     private fun createMockedUrlRepo(): ShortenedUrlRepository {
         val mock = mockk<ShortenedUrlRepository>()
         every { mock.findByIdOrNull(any()) } returns null
-        every { mock.findByOriginalUrlOrNull(any())} returns null
+        every { mock.findByOriginalUrl(any())} returns null
         val savedUrl = slot<DbUrl>()
         every { mock.save(capture(savedUrl)) } answers { savedUrl.captured }
         return mock
